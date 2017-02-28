@@ -1,5 +1,5 @@
 import openpathsampling as paths
-from openpathsampling.engine.openmm.tools import trajectory_to_mdtraj
+from openpathsampling.engines.openmm.tools import trajectory_to_mdtraj
 from contact_map import ContactFrequency
 from openpathsampling.netcdfplus import StorableNamedObject
 
@@ -29,11 +29,11 @@ class StableContactsState(StorableNamedObject):
         ----------
         trajectory : :class:`openpathsampling.Trajectory`
         """
-        traj = trajectory_to_mdtraj(trajectory, topology=self.topology)
+        traj = trajectory_to_mdtraj(trajectory, md_topology=self.topology)
         if len(trajectory) < self.n_frames:
             return False
         subtraj = traj[0:self.n_frames]
-        contacts = ContactFrequency(trajectory,
+        contacts = ContactFrequency(subtraj,
                                     query=self.query,
                                     haystack=self.haystack,
                                     cutoff=self.cutoff)
@@ -43,7 +43,6 @@ class StableContactsState(StorableNamedObject):
             return True
         else:
             return False
-
 
     def check_end(self, trajectory):
         if len(trajectory) < self.n_frames:

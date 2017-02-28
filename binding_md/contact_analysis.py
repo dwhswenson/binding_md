@@ -55,7 +55,7 @@ class LigandContactAnalysis(object):
         self.ligand_atoms = sum(ligand_groups.values(), [])
         self.topology = trajectory.topology
         self.ligand_resids = ligand_resids
-        self.cutoff = 0.45
+        self.cutoff = cutoff
         self.freq_cutoff = freq_cutoff
         self.n_frames = len(trajectory)
 

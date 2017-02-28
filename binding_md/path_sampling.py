@@ -39,6 +39,8 @@ class StableContactsState(StorableNamedObject):
                                     cutoff=self.cutoff)
         most_common = \
                 contacts.residue_contacts.most_common()[:self.n_contacts]
+        if len(most_common) < self.n_contacts:
+            return False
         if most_common[-1][1] >= self.frequency:
             return True
         else:

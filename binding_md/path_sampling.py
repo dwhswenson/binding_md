@@ -66,7 +66,7 @@ class MultipleBindingEnsemble(paths.Ensemble):
     :class:`.StableContactState` object.
     """
     def __init__(self, initial_state, known_states, stable_contact_state,
-                 excluded_volume=None):
+                 excluded_volume=None, window_offset=None):
         self.initial_state = initial_state
         self.known_states = known_states
         self.states = paths.join_volumes(set([initial_state]+known_states))
@@ -76,6 +76,9 @@ class MultipleBindingEnsemble(paths.Ensemble):
         self.excluded_volume = excluded_volume
         self.excluded_volume_ensemble = \
                 paths.AllOutXEnsemble(self.excluded_volume)
+        if window_offset is None:
+            window_offset = self.stable_contact_state.n_frames / 2
+        self.window_offset = window_offset
 
     def _check_length(self, trajectory):
         return len(trajectory) >= self.stable_contact_state.n_frames
@@ -111,7 +114,23 @@ class MultipleBindingEnsemble(paths.Ensemble):
             )
         return end
 
+    def _all_subtrajectory_windows(self, trajectory):
+        n_frames = self.stable_contact_state.n_frames
+        window_offset = self.window_offset
+        len_max = len(trajectory) - n_frames
+        return [trajectory[offset : offset + n_frames]
+                for offset in range(0, len_max, window_offset)]
+
+    def _check_continue_one_frame(self, trajectory):
+        frame = trajectory[0]
+        if self.states(frame) and not self.initial_state(frame):
+            return False  # one frame in a final state
+        else:
+            return True  # either 1 frame in initial, or 1 frame
+
     def can_append(self, trajectory, trusted=None):
+        if len(trajectory) == 1:
+            return self._check_continue_one_frame(trajectory)
         end = self._check_end(trajectory)
         if trusted:
             return not end
@@ -119,6 +138,8 @@ class MultipleBindingEnsemble(paths.Ensemble):
             pass  # TODO
 
     def can_prepend(self, trajectory, trusted=None):
+        if len(trajectory) == 1:
+            return self._check_continue_one_frame(trajectory)
         start = self._check_start(trajectory)
         if trusted:
             return not start
@@ -126,13 +147,16 @@ class MultipleBindingEnsemble(paths.Ensemble):
             pass  # TODO
 
     def __call__(self, trajectory, trusted=None, candidate=False):
+        candidate_check = (self.initial_state(trajectory[0])
+                           and self._check_end(trajectory))
         if candidate:
-            return (
-                self.initial_state(trajectory[0])
-                and self._check_end(trajectory)
-            )
+            return candidate_check
+        elif candidate_check and not self.initial_state(trajectory[-1]):
+            subtrajectories = self._all_subtrajectory_windows(trajectory)
+            return not any([self._check_end(subtraj)
+                            for subtraj in subtrajectories])
         else:
-            pass  # TODO
+            return False
 
     def strict_can_append(self, trajectory, trusted=False):
         if not self.initial_state(trajectory[0]):

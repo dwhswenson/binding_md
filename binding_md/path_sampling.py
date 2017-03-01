@@ -65,10 +65,11 @@ class MultipleBindingEnsemble(paths.Ensemble):
     The definition of the contacts being stable is determined by the
     :class:`.StableContactState` object.
     """
-    def __init__(self, known_states, stable_contact_state,
+    def __init__(self, initial_state, known_states, stable_contact_state,
                  excluded_volume=None):
+        self.initial_state = initial_state
         self.known_states = known_states
-        self.states = paths.join_volumes(known_states)
+        self.states = paths.join_volumes(set([initial_state]+known_states))
         self.stable_contact_state = stable_contact_state
         if excluded_volume is None:
             excluded_volume = paths.EmptyVolume()
@@ -91,8 +92,10 @@ class MultipleBindingEnsemble(paths.Ensemble):
         if not start and self._should_check_stable_contacts(trajectory):
             start_subtraj = trajectory[0:self.stable_contact_state.n_frames]
             start = (
-                self.excluded_volume_ensemble(start_subtraj)
-                and self.stable_contact_state.check_start(start_subtraj)
+                self.stable_contact_state.check_start(trajectory)
+                and self.excluded_volume_ensemble(start_subtraj)
+                # first part needs whole trajectory to ensure that we check
+                # only on the right windows
             )
         return start
 
@@ -101,34 +104,42 @@ class MultipleBindingEnsemble(paths.Ensemble):
         if not end and self._should_check_stable_contacts(trajectory):
             end_subtraj = trajectory[-self.stable_contact_state.n_frames:]
             end = (
-                self.excluded_volume_ensemble(end_subtraj)
-                and self.stable_contact_state.check_end(end_subtraj)
+                self.stable_contact_state.check_end(trajectory)
+                and self.excluded_volume_ensemble(end_subtraj)
+                # first part needs whole trajectory to ensure that we check
+                # only on the right windows
             )
         return end
 
     def can_append(self, trajectory, trusted=None):
+        end = self._check_end(trajectory)
         if trusted:
-            return self._check_end(trajectory)
+            return not end
         else:
             pass  # TODO
 
     def can_prepend(self, trajectory, trusted=None):
+        start = self._check_start(trajectory)
         if trusted:
-            return self._check_start(trajectory)
+            return not start
         else:
             pass  # TODO
 
     def __call__(self, trajectory, trusted=None, candidate=False):
         if candidate:
-            start = self._check_start(trajectory)
-            end = self._check_end(trajectory)
-            return start and end
+            return (
+                self.initial_state(trajectory[0])
+                and self._check_end(trajectory)
+            )
         else:
             pass  # TODO
 
-    def strict_can_append(self, trajectory):
-        pass  # TODO
+    def strict_can_append(self, trajectory, trusted=False):
+        if not self.initial_state(trajectory[0]):
+            return False
+        return self.can_append(trajectory, trusted)
 
-    def strict_can_prepend(self, trajectory):
-        pass  # TODO
-
+    def strict_can_prepend(self, trajectory, trusted=False):
+        if not self._check_end(trajectory):
+            return False
+        return self.can_prepend(trajectory, trusted)

@@ -188,7 +188,7 @@ class MultipleBindingShootingPointSelector(paths.ShootingPointSelector):
             ens = self.multiple_binding_ensemble  # convenience
             # note that we assume that the trajectory satisfies the
             # ensemble; if not, something has gone wrong in sampling
-            if ens.known_states(trajectory[-1]):
+            if ens.states(trajectory[-1]):
                 return trajectory
             else:
                 # the +1 keeps the padding correct
@@ -196,12 +196,12 @@ class MultipleBindingShootingPointSelector(paths.ShootingPointSelector):
 
     def f(self, snapshot, trajectory):
         subtraj = self._get_subtrajectory(trajectory)
-        return subselector.f(snapshot, subtraj)
+        return self.subselector.f(snapshot, subtraj)
 
     def pick(self, trajectory):
         subtraj = self._get_subtrajectory(trajectory)
-        return subselector.pick(subtraj)
+        return self.subselector.pick(subtraj)
 
     def sum_bias(self, trajectory):
         subtraj = self._get_subtrajectory(trajectory)
-        return self.subselector.sum_bias(
+        return self.subselector.sum_bias(subtraj)

@@ -167,3 +167,41 @@ class MultipleBindingEnsemble(paths.Ensemble):
         if not self._check_end(trajectory):
             return False
         return self.can_prepend(trajectory, trusted)
+
+
+class MultipleBindingShootingPointSelector(paths.ShootingPointSelector):
+    def __init__(self, multiple_binding_ensemble, subselector=None):
+        self.multiple_binding_ensemble = multiple_binding_ensemble
+        if subselector is None:
+            subselector = paths.UniformSelector()
+        self.subselector = subselector
+        # cache the previously tested trajectory and the resulting
+        # subtrajectory. This avoids wasteful recalc for most cases of
+        # multiple use of `f`, `pick`, `sum_bias` for the same input traj
+        self._cached_subtraj = paths.Trajectory([])
+        self._cached_traj = paths.Trajectory([])
+
+    def _get_subtrajectory(self, trajectory):
+        if trajectory == self._cached_traj:
+            return self._cached_subtraj
+        else:
+            ens = self.multiple_binding_ensemble  # convenience
+            # note that we assume that the trajectory satisfies the
+            # ensemble; if not, something has gone wrong in sampling
+            if ens.known_states(trajectory[-1]):
+                return trajectory
+            else:
+                # the +1 keeps the padding correct
+                return trajectory[0:-ens.stable_contact_state.n_frames+1]
+
+    def f(self, snapshot, trajectory):
+        subtraj = self._get_subtrajectory(trajectory)
+        return subselector.f(snapshot, subtraj)
+
+    def pick(self, trajectory):
+        subtraj = self._get_subtrajectory(trajectory)
+        return subselector.pick(subtraj)
+
+    def sum_bias(self, trajectory):
+        subtraj = self._get_subtrajectory(trajectory)
+        return self.subselector.sum_bias(

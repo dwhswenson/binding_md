@@ -205,3 +205,18 @@ class MultipleBindingShootingPointSelector(paths.ShootingPointSelector):
     def sum_bias(self, trajectory):
         subtraj = self._get_subtrajectory(trajectory)
         return self.subselector.sum_bias(subtraj)
+
+
+# TODO: move these two into OPS: or better yet, change the current
+# implementation in OPS base classes so that they work like this
+class SingleEnsembleTransition(paths.Transition):
+    def __init__(self, ensemble, stateA, stateB):
+        super(SingleEnsembleTransition, self).__init__(stateA, stateB)
+        self.ensembles = [ensemble]
+
+class NetworkFromTransitions(paths.TransitionNetwork):
+    # this is really how paths.TransitionNetwork should work
+    def __init__(self, sampling_transitions, transitions):
+        super(NetworkFromTransitions, self).__init__()
+        self._sampling_transitions = sampling_transitions
+        self.transitions=transitions

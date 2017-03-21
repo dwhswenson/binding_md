@@ -10,16 +10,17 @@ class StableContactsState(StorableNamedObject):
         """
         Parameters
         ----------
-        topology : :class:`mdtraj.Topology`
+        topology : :class:`openpathsampling.engines.openmm.MDTrajTopology`
         ligand_groups : dict of {str: list of int}
         """
         self.topology = topology
+        self.md_topology = topology.mdtraj
         self.ligand_groups = ligand_groups
         self.n_contacts = n_contacts
         self.n_frames = n_frames
         self.frequency = frequency
         self.query = sum(self.ligand_groups.values(), [])
-        self.haystack = topology.select("protein and symbol != 'H'")
+        self.haystack = self.md_topology.select("protein and symbol != 'H'")
 
         self.cutoff = 0.4
 
@@ -29,7 +30,7 @@ class StableContactsState(StorableNamedObject):
         ----------
         trajectory : :class:`openpathsampling.Trajectory`
         """
-        traj = trajectory_to_mdtraj(trajectory, md_topology=self.topology)
+        traj = trajectory_to_mdtraj(trajectory, md_topology=self.md_topology)
         if len(trajectory) < self.n_frames:
             return False
         subtraj = traj[0:self.n_frames]
@@ -67,6 +68,7 @@ class MultipleBindingEnsemble(paths.Ensemble):
     """
     def __init__(self, initial_state, known_states, stable_contact_state,
                  excluded_volume=None, window_offset=None):
+        super(MultipleBindingEnsemble, self).__init__()
         self.initial_state = initial_state
         self.known_states = known_states
         self.states = paths.join_volumes(set([initial_state]+known_states))
@@ -220,3 +222,19 @@ class NetworkFromTransitions(paths.TransitionNetwork):
         super(NetworkFromTransitions, self).__init__()
         self._sampling_transitions = sampling_transitions
         self.transitions=transitions
+
+
+class StableContactsCommittorSimulation(paths.ShootFromSnapshotsSimulation):
+    def __init__(self, storage, multiple_binding_ensemble, randomizer,
+                 engine, initial_snapshots):
+        starting_volume = ~multiple_binding_ensemble.states
+        super(StableContactsCommittorSimulation, self).__init__(
+            storage=storage,
+            engine=engine,
+            starting_volume=starting_volume,
+            forward_ensemble=multiple_binding_ensemble,
+            backward_ensemble=multiple_binding_ensemble,
+            randomizer=randomizer,
+            initial_snapshots=initial_snapshots
+        )
+

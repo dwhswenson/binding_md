@@ -4,4 +4,5 @@ from path_sampling import (
     SingleEnsembleTransition, NetworkFromTransitions,  # TODO: move
     StableContactsState, MultipleBindingEnsemble,
     MultipleBindingShootingPointSelector,
+    StableContactsCommittorSimulation
 )

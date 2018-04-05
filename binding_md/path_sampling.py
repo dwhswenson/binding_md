@@ -3,6 +3,21 @@ from openpathsampling.engines.openmm.tools import trajectory_to_mdtraj
 from contact_map import ContactFrequency
 from openpathsampling.netcdfplus import StorableNamedObject
 
+import logging
+logger = logging.Logger(__name__)
+
+# conveniences for handling directions
+FWD = +1
+BKWD = -1
+
+def clean_direction(direction):
+    if direction > 0:
+        return FWD
+    elif direction < 0:
+        return BKWD
+    else:
+        raise ValueError("Bad direction: " + str(direction))
+
 
 class StableContactsState(StorableNamedObject):
     def __init__(self, topology, ligand_groups, n_frames, n_contacts,
@@ -21,37 +36,147 @@ class StableContactsState(StorableNamedObject):
         self.frequency = frequency
         self.query = sum(self.ligand_groups.values(), [])
         self.haystack = self.md_topology.select("protein and symbol != 'H'")
-
         self.cutoff = 0.4
 
-    def check_start(self, trajectory):
+    def make_contact_frequency(self, trajectory):
+        """Convenience for making a ContactFrequency object.
+        """
+        return ContactFrequency(
+            trajectory=trajectory_to_mdtraj(trajectory),
+            query=self.query,
+            haystack=self.haystack,
+            cutoff=self.cutoff
+        )
+
+    def subtraj_for_direction(self, trajectory, direction):
+        direction = clean_direction(direction)
+        my_slice = {FWD: slice(-self.n_frames, None),
+                    BKWD: slice(0, self.n_frames)}[direction]
+        return trajectory[my_slice]
+
+    def _check_one_side(self, trajectory, direction, cache=None):
+        if len(trajectory) < self.n_frames:
+            return False
+        traj = trajectory_to_mdtraj(trajectory=trajectory,
+                                    md_topology=self.md_topology)
+        if not cache:
+            subtraj = self.subtraj_for_direction(trajectory, direction)
+            contacts = self.make_contact_frequency(subtraj)
+        else:
+            contacts = cache.updated_contact_frequency(trajectory,
+                                                       direction)
+
+        most_common = \
+                contacts.residue_contacts.most_common()[:self.n_contacts]
+
+        return (len(most_common) >= self.n_contacts
+                and most_common[-1][1] >= self.frequency)
+
+
+    def check_start(self, trajectory, cache=None):
         """
         Parameters
         ----------
         trajectory : :class:`openpathsampling.Trajectory`
         """
-        traj = trajectory_to_mdtraj(trajectory, md_topology=self.md_topology)
-        if len(trajectory) < self.n_frames:
-            return False
-        subtraj = traj[0:self.n_frames]
-        contacts = ContactFrequency(subtraj,
-                                    query=self.query,
-                                    haystack=self.haystack,
-                                    cutoff=self.cutoff)
-        most_common = \
-                contacts.residue_contacts.most_common()[:self.n_contacts]
-        if len(most_common) < self.n_contacts:
-            return False
-        if most_common[-1][1] >= self.frequency:
-            return True
+        return self._check_one_side(trajectory, direction=-1, cache=cache)
+
+    def check_end(self, trajectory, cache=None):
+        return self._check_one_side(trajectory, direction=+1, cache=cache)
+
+
+class MultipleBindingEnsembleCache(object):
+    """Cache of contact frequency that can be updated frame-by-frame.
+
+    Parameters
+    ----------
+    ensemble : :class:`.MultipleBindingEnsemble`
+    direction : +1 or -1
+    """
+    def __init__(self, ensemble, direction=+1):
+        self.ensemble = ensemble
+        self.direction = direction
+        self.initial_frame = None
+        self.final_frame = None
+        self.last_trajectory_length = 0
+        self.contact_frequency = None
+
+    @property
+    def _make_contact_freq(self):
+        return self.ensemble.stable_contact_state.make_contact_frequency
+
+    def updated_contact_frequency(self, trajectory, direction):
+        if direction != self.direction:
+            raise RuntimeError(
+                "Wrong cache for direction: cache is %d; direction is %d",
+                self.direction, direction
+            )
+
+        if not self.is_valid(trajectory, direction):
+            self.reset(trajectory)
         else:
+            self._update(trajectory)
+
+        return self.contact_frequency
+
+    def is_valid(self, trajectory, direction):
+        """check whether the trajectory is compatible with cached info
+        """
+        if len(trajectory) < 2:
             return False
 
-    def check_end(self, trajectory):
-        if len(trajectory) < self.n_frames:
-            return False
+        direction = clean_direction(direction)
+        prev_initial_frame, prev_final_frame = {
+            FWD: (trajectory[0], trajectory[-2]),
+            BKWD: (trajectory[1], trajectory[-1])
+        }[direction]
+        return (self.initial_frame == prev_initial_frame
+                and self.final_frame == prev_final_frame)
+
+    def reset(self, trajectory):
+        """Reset the cache for a new trajectory
+        """
+        self.last_trajectory_length = len(trajectory)
+        if self.last_trajectory_length == 0:
+            self.initial_frame = None
+            self.final_frame = None
         else:
-            return self.check_start(trajectory[-self.n_frames:])
+            self.initial_frame = trajectory[0]
+            self.final_frame = trajectory[-1]
+
+        subtraj = self.ensemble.stable_contact_state.subtraj_for_direction(
+            trajectory=trajectory,
+            direction=self.direction
+        )
+        if len(subtraj) == 0:
+            self.contact_frequency = None
+        else:
+            self.contact_frequency = self._make_contact_freq(subtraj)
+
+    def _update(self, trajectory, direction=None):
+        if direction is None:
+            direction = self.direction
+        direction = clean_direction(direction)
+        n_frames = self.ensemble.stable_contact_state.n_frames
+
+        self.initial_frame = trajectory[0]
+        self.final_frame = trajectory[-1]
+
+        add_frame = {FWD: trajectory[-1], BKWD: trajectory[0]}[direction]
+        add_freq = self._make_contact_freq(paths.Trajectory([add_frame]))
+        logger.debug("Adding frame to contact frequency")
+        self.contact_frequency.add_contact_frequency(add_freq)
+
+        if len(trajectory) > n_frames:
+            sub_frame = {FWD: trajectory[-n_frames],
+                         BKWD: trajectory[n_frames - 1]}[direction]
+            sub_freq = self._make_contact_freq(paths.Trajectory([sub_frame]))
+            logger.debug("Subtracting frame from contact frequency")
+            self.contact_frequency.subtract_contact_frequency(sub_freq)
+
+        logger.debug("Contact frequency based on length %d",
+                     self.contact_frequency.n_frames)
+
 
 
 class MultipleBindingEnsemble(paths.Ensemble):
@@ -65,12 +190,15 @@ class MultipleBindingEnsemble(paths.Ensemble):
 
     The definition of the contacts being stable is determined by the
     :class:`.StableContactState` object.
+
     """
     def __init__(self, initial_state, known_states, stable_contact_state,
                  excluded_volume=None, window_offset=None):
         super(MultipleBindingEnsemble, self).__init__()
         self.initial_state = initial_state
         self.known_states = known_states
+        self.final_state = paths.join_volumes(set(known_states)
+                                              - set([initial_state]))
         self.states = paths.join_volumes(set([initial_state]+known_states))
         self.stable_contact_state = stable_contact_state
         if excluded_volume is None:
@@ -78,97 +206,178 @@ class MultipleBindingEnsemble(paths.Ensemble):
         self.excluded_volume = excluded_volume
         self.excluded_volume_ensemble = \
                 paths.AllOutXEnsemble(self.excluded_volume)
-        if window_offset is None:
-            window_offset = self.stable_contact_state.n_frames / 2
-        self.window_offset = window_offset
+        # if window_offset is None:
+            # window_offset = self.stable_contact_state.n_frames / 2
+        # self.window_offset = window_offset
+        self.cache = {d: MultipleBindingEnsembleCache(self, direction=d)
+                      for d in [FWD, BKWD]}
 
-    def _check_length(self, trajectory):
-        return len(trajectory) >= self.stable_contact_state.n_frames
+    # def _check_length(self, trajectory):
+        # return len(trajectory) >= self.stable_contact_state.n_frames
 
-    def _window_edge(self, trajectory):
-        return (len(trajectory) % self.window_offset == 0)
+    # def _window_edge(self, trajectory):
+        # return (len(trajectory) % self.window_offset == 0)
 
-    def _should_check_stable_contacts(self, trajectory):
-        return (self._check_length(trajectory)
-                and self._window_edge(trajectory))
+    # def _should_check_stable_contacts(self, trajectory):
+        # return (self._check_length(trajectory)
+                # and self._window_edge(trajectory))
 
-    def _check_start(self, trajectory):
-        start = self.states(trajectory[0])
-        if not start and self._should_check_stable_contacts(trajectory):
-            start_subtraj = trajectory[0:self.stable_contact_state.n_frames]
-            start = (
-                self.stable_contact_state.check_start(trajectory)
-                and self.excluded_volume_ensemble(start_subtraj)
-                # first part needs whole trajectory to ensure that we check
-                # only on the right windows
-            )
-        return start
 
-    def _check_end(self, trajectory):
-        end = self.states(trajectory[-1])
-        if not end and self._should_check_stable_contacts(trajectory):
-            end_subtraj = trajectory[-self.stable_contact_state.n_frames:]
-            end = (
-                self.stable_contact_state.check_end(trajectory)
-                and self.excluded_volume_ensemble(end_subtraj)
-                # first part needs whole trajectory to ensure that we check
-                # only on the right windows
-            )
-        return end
+    def _trusted_analysis(self, trajectory, state, direction, is_check,
+                          cache=None):
+        """Generic function for testing checking and continuing criteria
 
-    def _all_subtrajectory_windows(self, trajectory):
+        Parameters
+        ----------
+        trajectory : :class:`openpathsampling.Trajectory`
+        direction : +1 or -1
+        is_check : bool
+            if True, this checks inclusion; if false, this is can_append or
+            can_prepend
+        state : :class:`openpathsampling.Volume`
+            a single volume joining all relevant states
+        cache : :class:`.MultipleBindingEnsembleCache`
+
+        Return
+        ------
+        bool
+        """
+        direction = clean_direction(direction)
+        if len(trajectory) == 1:
+            return (self._check_continue_one_frame(trajectory, direction)
+                    and not is_check)
+
+        frame_idx = {FWD: -1, BKWD: 0}[direction]
         n_frames = self.stable_contact_state.n_frames
-        window_offset = self.window_offset
-        len_max = len(trajectory) - n_frames
-        return [trajectory[offset : offset + n_frames]
-                for offset in range(0, len_max, window_offset)]
+        subtraj_slice = {FWD: slice(-n_frames, None),
+                         BKWD: slice(0, n_frames)}[direction]
 
-    def _check_continue_one_frame(self, trajectory):
+        # length convenience
+        ex_vol_ens = self.excluded_volume_ensemble
+        excluded_volume_check = {
+            (False, FWD): lambda traj: \
+                ex_vol_ens.can_append(traj, trusted=True),
+            (False, BKWD): lambda traj: \
+                ex_vol_ens.can_prepend(traj, trusted=True),
+            (True, FWD): lambda traj: \
+                ex_vol_ens(traj, candidate=True),
+            (True, BKWD): lambda traj: \
+                ex_vol_ens.check_reverse(traj, candidate=True)
+        }[is_check, direction]
+
+        stable_contact_check = {
+            FWD: self.stable_contact_state.check_end,
+            BKWD: self.stable_contact_state.check_start
+        }[direction]
+
+        # conditions in which we cannot extend -- either
+        #   1. endpoint is in a state
+        #   2. subtraj has stable contacts and is outside excluded volume
+        # the order here should make it so we short-circuit to avoid the
+        # most expensive steps
+        in_ensemble = (
+            state(trajectory[frame_idx])
+            or (
+                excluded_volume_check(trajectory[subtraj_slice])
+                and stable_contact_check(trajectory, cache=cache)
+            )
+        )
+        # if is_check is False (i.e., doing can_append/prepend) then the
+        # test is successful if we *are not* in the ensemble. If is_check is
+        # True, then the test is successful if we *are* in the ensemble
+        return (in_ensemble == is_check)
+
+    def _untrusted_can_continue(self, trajectory, state, direction):
+        """Can-append/prepend for untrusted trajectories
+
+        Internally, we just create a cache and build up the trajectory using
+        the approach with ``trusted=True``.
+
+        Returns
+        -------
+        subtraj : :class:`.openpathsampling.Trajectory`
+            the longest subtrajectory that allowed can-append
+        cache : :class:`.MultipleBindingEnsembleCache`
+            cache with details of the analysis of ``subtraj``
+        """
+        direction = clean_direction(direction)
+        cache = MultipleBindingEnsembleCache(ensemble=self,
+                                             direction=direction)
+        n_frames = self.stable_contact_state.n_frames
+
+        n_frames = 1
+        can_continue = True
+        while can_continue and n_frames <= len(trajectory):
+            subtraj_slice = {FWD: slice(0, n_frames),
+                             BKWD: slice(-n_frames, None)}[direction]
+            subtraj = trajectory[subtraj_slice]
+            can_continue = self._trusted_analysis(trajectory=subtraj,
+                                                  state=state,
+                                                  direction=direction,
+                                                  is_check=False,
+                                                  cache=cache)
+            n_frames += 1
+        return (subtraj, cache)
+
+    def _check_continue_one_frame(self, trajectory, direction):
+        (allowed, forbidden) = {
+            FWD: (self.initial_state, self.final_state),
+            BKWD: (self.final_state, self.initial_state)
+        }[direction]
         frame = trajectory[0]
-        if self.states(frame) and not self.initial_state(frame):
-            return False  # one frame in a final state
-        else:
-            return True  # either 1 frame in initial, or 1 frame
+        return allowed(frame) or not forbidden(frame)
 
     def can_append(self, trajectory, trusted=None):
-        if len(trajectory) == 1:
-            return self._check_continue_one_frame(trajectory)
-        end = self._check_end(trajectory)
         if trusted:
-            return not end
+            result = self._trusted_analysis(trajectory=trajectory,
+                                            state=self.states,
+                                            direction=FWD,
+                                            is_check=False,
+                                            cache=self.cache[FWD])
         else:
-            pass  # TODO
+            subtraj, cache = self._untrusted_can_continue(
+                trajectory=trajectory,
+                state=self.states,
+                direction=FWD
+            )
+            result = (len(subtraj) == len(trajectory)
+                      and self._trusted_analysis(trajectory=subtraj,
+                                                 state=self.states,
+                                                 direction=FWD,
+                                                 is_check=False,
+                                                 cache=cache))
+        return result
 
     def can_prepend(self, trajectory, trusted=None):
-        if len(trajectory) == 1:
-            return self._check_continue_one_frame(trajectory)
-        start = self._check_start(trajectory)
-        if trusted:
-            return not start
-        else:
-            pass  # TODO
+        pass
+        # TODO
 
     def __call__(self, trajectory, trusted=None, candidate=False):
-        candidate_check = (self.initial_state(trajectory[0])
-                           and self._check_end(trajectory))
         if candidate:
-            return candidate_check
-        elif candidate_check and not self.initial_state(trajectory[-1]):
-            subtrajectories = self._all_subtrajectory_windows(trajectory)
-            return not any([self._check_end(subtraj)
-                            for subtraj in subtrajectories])
+            result = self._trusted_analysis(trajectory=trajectory,
+                                            states=self.final_state,
+                                            direction=FWD,
+                                            is_check=True,
+                                            cache=self.cache[FWD])
         else:
-            return False
+            subtraj, cache = self._untrusted_can_continue(
+                trajectory=trajecory,
+                state=self.states,
+                direction=FWD
+            )
+            result = self._trusted_analysis(trajectory=subtraj,
+                                            states=self.final_state,
+                                            direction=FWD,
+                                            is_check=True,
+                                            cache=cache)
+        return result
 
     def strict_can_append(self, trajectory, trusted=False):
-        if not self.initial_state(trajectory[0]):
-            return False
-        return self.can_append(trajectory, trusted)
+        return (self.initial_state(trajectory[0])
+                and self.can_append(trajectory, trusted))
 
     def strict_can_prepend(self, trajectory, trusted=False):
-        if not self._check_end(trajectory):
-            return False
-        return self.can_prepend(trajectory, trusted)
+        pass #TODO
 
 
 class MultipleBindingShootingPointSelector(paths.ShootingPointSelector):

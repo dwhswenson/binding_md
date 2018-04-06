@@ -84,6 +84,14 @@ class StableContactsState(StorableNamedObject):
     def check_end(self, trajectory, cache=None):
         return self._check_one_side(trajectory, direction=+1, cache=cache)
 
+    def __call__(self, trajectory):
+        if len(trajectory) != self.n_frames:
+            raise RuntimeError("Incorrect number of frames for trajectory: "
+                               "expected {}, found {}".format(
+                                   self.n_frames, len(trajectory)
+                               ))
+        return self.check_start(trajectory)
+
 
 class MultipleBindingEnsembleCache(object):
     """Cache of contact frequency that can be updated frame-by-frame.
@@ -154,6 +162,7 @@ class MultipleBindingEnsembleCache(object):
             self.contact_frequency = self._make_contact_freq(subtraj)
 
     def _update(self, trajectory, direction=None):
+        logger.debug("BEGIN MultipleBindingEnsembleCache._update")
         if direction is None:
             direction = self.direction
         direction = clean_direction(direction)
@@ -176,6 +185,7 @@ class MultipleBindingEnsembleCache(object):
 
         logger.debug("Contact frequency based on length %d",
                      self.contact_frequency.n_frames)
+        logger.debug("END MultipleBindingEnsembleCache._update")
 
 
 
@@ -273,6 +283,18 @@ class MultipleBindingEnsemble(paths.Ensemble):
         # conditions in which we cannot extend -- either
         #   1. endpoint is in a state
         #   2. subtraj has stable contacts and is outside excluded volume
+        # debug logging pre-calculates, and gives info; even with use of
+        # cache, this should be fine (with cache, it should return the same
+        # value it had before)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Checking trajectory length %s", len(trajectory))
+            logger.debug("* In known state: %s",
+                         state(trajectory[frame_idx]))
+            logger.debug("* In excluded volume: %s",
+                         excluded_volume_check(trajectory[subtraj_slice]))
+            logger.debug("* In stable contact state: %s",
+                         stable_contact_check(trajectory, cache=cache))
+
         # the order here should make it so we short-circuit to avoid the
         # most expensive steps
         in_ensemble = (

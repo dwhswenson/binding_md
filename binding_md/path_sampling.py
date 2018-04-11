@@ -219,8 +219,7 @@ class MultipleBindingEnsemble(paths.Ensemble):
         # if window_offset is None:
             # window_offset = self.stable_contact_state.n_frames / 2
         # self.window_offset = window_offset
-        self.cache = {d: MultipleBindingEnsembleCache(self, direction=d)
-                      for d in [FWD, BKWD]}
+        self.cache = self._initialize_cache()
 
     # def _check_length(self, trajectory):
         # return len(trajectory) >= self.stable_contact_state.n_frames
@@ -231,6 +230,16 @@ class MultipleBindingEnsemble(paths.Ensemble):
     # def _should_check_stable_contacts(self, trajectory):
         # return (self._check_length(trajectory)
                 # and self._window_edge(trajectory))
+
+    def _initialize_cache(self):
+        return  {d: MultipleBindingEnsembleCache(self, direction=d)
+                 for d in [FWD, BKWD]}
+
+    @classmethod
+    def from_dict(cls, dct):
+        obj = super(MultipleBindingEnsemble, cls).from_dict(dct)
+        obj._initialize_cache()
+        return obj
 
 
     def _trusted_analysis(self, trajectory, state, direction, is_check,

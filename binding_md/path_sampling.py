@@ -238,7 +238,7 @@ class MultipleBindingEnsemble(paths.Ensemble):
     @classmethod
     def from_dict(cls, dct):
         obj = super(MultipleBindingEnsemble, cls).from_dict(dct)
-        obj._initialize_cache()
+        obj.cache = obj._initialize_cache()
         return obj
 
 

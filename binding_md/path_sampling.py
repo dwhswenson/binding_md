@@ -201,9 +201,15 @@ class MultipleBindingEnsemble(paths.Ensemble):
     The definition of the contacts being stable is determined by the
     :class:`.StableContactState` object.
 
+    Parameters
+    ----------
+    initial_state: :class:`openpathsampling.Volume`
+    known_states: list of :class:`openpathsampling.Volume`
+    stable_contact_state : :class:`.StableContactsState`
+    excluded_volume : :class:`.openpathsampling.Volume`
     """
     def __init__(self, initial_state, known_states, stable_contact_state,
-                 excluded_volume=None, window_offset=None):
+                 excluded_volume=None):
         super(MultipleBindingEnsemble, self).__init__()
         self.initial_state = initial_state
         self.known_states = known_states
@@ -216,20 +222,7 @@ class MultipleBindingEnsemble(paths.Ensemble):
         self.excluded_volume = excluded_volume
         self.excluded_volume_ensemble = \
                 paths.AllOutXEnsemble(self.excluded_volume)
-        # if window_offset is None:
-            # window_offset = self.stable_contact_state.n_frames / 2
-        # self.window_offset = window_offset
         self.cache = self._initialize_cache()
-
-    # def _check_length(self, trajectory):
-        # return len(trajectory) >= self.stable_contact_state.n_frames
-
-    # def _window_edge(self, trajectory):
-        # return (len(trajectory) % self.window_offset == 0)
-
-    # def _should_check_stable_contacts(self, trajectory):
-        # return (self._check_length(trajectory)
-                # and self._window_edge(trajectory))
 
     def _initialize_cache(self):
         return  {d: MultipleBindingEnsembleCache(self, direction=d)
@@ -262,6 +255,9 @@ class MultipleBindingEnsemble(paths.Ensemble):
         bool
         """
         direction = clean_direction(direction)
+        logger.info("Analysis: traj length %s, %s %s", len(trajectory),
+                    {1: "forward", -1: "backward"}[direction],
+                    {True: "check", False: "continuation"}[is_check])
         if len(trajectory) == 1:
             return (self._check_continue_one_frame(trajectory, direction)
                     and not is_check)
@@ -283,6 +279,8 @@ class MultipleBindingEnsemble(paths.Ensemble):
             (True, BKWD): lambda traj: \
                 ex_vol_ens.check_reverse(traj, candidate=True)
         }[is_check, direction]
+        # TODO: check that this works correctly; also see if we can create a
+        # rolling cache to do it more efficiently
 
         stable_contact_check = {
             FWD: self.stable_contact_state.check_end,
@@ -292,31 +290,48 @@ class MultipleBindingEnsemble(paths.Ensemble):
         # conditions in which we cannot extend -- either
         #   1. endpoint is in a state
         #   2. subtraj has stable contacts and is outside excluded volume
-        # debug logging pre-calculates, and gives info; even with use of
-        # cache, this should be fine (with cache, it should return the same
-        # value it had before)
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug("Checking trajectory length %s", len(trajectory))
-            logger.debug("* In known state: %s",
-                         state(trajectory[frame_idx]))
-            logger.debug("* In excluded volume: %s",
-                         excluded_volume_check(trajectory[subtraj_slice]))
-            logger.debug("* In stable contact state: %s",
-                         stable_contact_check(trajectory, cache=cache))
 
-        # the order here should make it so we short-circuit to avoid the
-        # most expensive steps
-        in_ensemble = (
-            state(trajectory[frame_idx])
-            or (
-                excluded_volume_check(trajectory[subtraj_slice])
-                and stable_contact_check(trajectory, cache=cache)
-            )
-        )
+        # This is the short form of the code used below. The longer version
+        # (with explicit short-circuits) is used to make debug logging
+        # better.
+        # in_ensemble = (
+            # state(trajectory[frame_idx])
+            # or (
+                # excluded_volume_check(trajectory[subtraj_slice])
+                # and stable_contact_check(trajectory, cache=cache)
+            # )
+        # )
+
+        in_ensemble = None
+        keys = {True: "True", False: "False", None: "Skipped"} # logging
+        state_res = state(trajectory[frame_idx])
+        excl_vol_res = None
+        stable_res = None
+        if state_res:
+            in_ensemble = state_res
+
+        logger.info("* In known state: " + keys[state_res])
+
+        if in_ensemble is None:
+            subtraj = trajectory[subtraj_slice]
+            excl_vol_res = excluded_volume_check(subtraj)
+            if not excl_vol_res:
+                in_ensemble = False
+
+        logger.info("* Outside excluded volume " + keys[excl_vol_res])
+
+        if in_ensemble is None:
+            stable_res = stable_contact_check(trajectory, cache=cache)
+            in_ensemble = stable_res
+
+        logger.info("* In stable contact state: " + keys[stable_res])
+        logger.info("is_check: " + is_check
+                    + " |  in_ensemble: " + in_ensemble
+                    + " |  returning: " + is_check == in_ensemble)
         # if is_check is False (i.e., doing can_append/prepend) then the
         # test is successful if we *are not* in the ensemble. If is_check is
         # True, then the test is successful if we *are* in the ensemble
-        return (in_ensemble == is_check)
+        return is_check == in_ensemble
 
     def _untrusted_can_continue(self, trajectory, state, direction):
         """Can-append/prepend for untrusted trajectories
@@ -386,18 +401,18 @@ class MultipleBindingEnsemble(paths.Ensemble):
     def __call__(self, trajectory, trusted=None, candidate=False):
         if candidate:
             result = self._trusted_analysis(trajectory=trajectory,
-                                            states=self.final_state,
+                                            state=self.final_state,
                                             direction=FWD,
                                             is_check=True,
                                             cache=self.cache[FWD])
         else:
             subtraj, cache = self._untrusted_can_continue(
-                trajectory=trajecory,
+                trajectory=trajectory,
                 state=self.states,
                 direction=FWD
             )
             result = self._trusted_analysis(trajectory=subtraj,
-                                            states=self.final_state,
+                                            state=self.final_state,
                                             direction=FWD,
                                             is_check=True,
                                             cache=cache)

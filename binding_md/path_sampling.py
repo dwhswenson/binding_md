@@ -292,8 +292,7 @@ class MultipleBindingEnsemble(paths.Ensemble):
         #   2. subtraj has stable contacts and is outside excluded volume
 
         # This is the short form of the code used below. The longer version
-        # (with explicit short-circuits) is used to make debug logging
-        # better.
+        # (with explicit short-circuits) is used to make logging better.
         # in_ensemble = (
             # state(trajectory[frame_idx])
             # or (
@@ -318,16 +317,16 @@ class MultipleBindingEnsemble(paths.Ensemble):
             if not excl_vol_res:
                 in_ensemble = False
 
-        logger.info("* Outside excluded volume " + keys[excl_vol_res])
+        logger.info("* Outside excluded volume: " + keys[excl_vol_res])
 
         if in_ensemble is None:
             stable_res = stable_contact_check(trajectory, cache=cache)
             in_ensemble = stable_res
 
         logger.info("* In stable contact state: " + keys[stable_res])
-        logger.info("is_check: " + is_check
-                    + " |  in_ensemble: " + in_ensemble
-                    + " |  returning: " + is_check == in_ensemble)
+        logger.info("is_check: " + str(is_check)
+                    + " |  in_ensemble: " + str(in_ensemble)
+                    + " |  returning: " + str(is_check == in_ensemble))
         # if is_check is False (i.e., doing can_append/prepend) then the
         # test is successful if we *are not* in the ensemble. If is_check is
         # True, then the test is successful if we *are* in the ensemble

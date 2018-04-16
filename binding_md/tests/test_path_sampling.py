@@ -82,8 +82,8 @@ class TestStableContactsState(object):
 class TestMultipleBindingEnsemble(object):
     def setup(self):
         distance_pairs = list(itertools.product(range(4), range(4, 6)))
-        distance = {
-            frozenset(pair): paths.MDTrajFunctionCV(
+        dist = {
+            pair: paths.MDTrajFunctionCV(
                 name="dist" + str(pair),
                 f=md.compute_distances,
                 topology=topology,
@@ -91,21 +91,56 @@ class TestMultipleBindingEnsemble(object):
             )
             for pair in distance_pairs
         }
-        # bound state
-        # unbound state
-        # stable contact state
-        # excluded volume
-        # self.ensemble = MultipleBindingEnsemble(
-        # )
+        min_dist = paths.MDTrajFunctionCV(
+            name="min_dist",
+            topology=topology,
+            f=lambda traj, pairs: \
+                md.compute_distances(traj, atom_pairs=pairs).min(axis=1),
+            pairs=list(dist.keys()),
+            cv_scalarize_numpy_singletons=False
+        )
+        self.bound_state = paths.CVDefinedVolume(dist[(0, 4)], 0.0, 0.06) \
+                and paths.CVDefinedVolume(dist[(1, 5)], 0.0, 0.06)
+        self.unbound_state = paths.CVDefinedVolume(min_dist,
+                                                   0.2, float("inf"))
+        self.excluded_volume = (
+            paths.CVDefinedVolume(dist[(0, 4)], 0.0, 0.075)
+            and paths.CVDefinedVolume(dist[(0, 5)], 0.0, 0.075)
+            and paths.CVDefinedVolume(dist[(1, 4)], 0.0, 0.075)
+            and paths.CVDefinedVolume(dist[(1, 5)], 0.0, 0.075)
+        )
+
+        self.ensemble = MultipleBindingEnsemble(
+            initial_state=self.bound_state,
+            known_states=[self.bound_state, self.unbound_state],
+            stable_contact_state=stable_contact_state,
+            excluded_volume=self.excluded_volume
+        )
+        self.ensemble_with_cache = MultipleBindingEnsemble(
+            initial_state=self.bound_state,
+            known_states=[self.bound_state, self.unbound_state],
+            stable_contact_state=stable_contact_state,
+            excluded_volume=self.excluded_volume
+        )
         self.accept = {key: make_trajectory(key)
                        for key in ['bocxu', 'bxcocc']}
         self.reject = {key: make_trajectory(key)
                        for key in ['bocxcc']}
 
-    def test_can_append_accept(self):
+    def test_setup_sanity(self):
+        assert self.bound_state(bound_frame)
+        assert self.unbound_state(unbound_frame)
+        assert self.excluded_volume(excl_vol_frame)
+        assert not self.excluded_volume(unbound_frame)
+        assert not self.excluded_volume(contact_frame)
+        assert self.excluded_volume(bound_frame)
+
+    @pytest.mark.parametrize('traj', ['bocxu', 'bxcocc'])
+    def test_can_append_accept(self, traj):
         pass
 
-    def test_can_append_reject(self):
+    @pytest.mark.parametrize('traj', ['bocxcc'])
+    def test_can_append_reject(self, traj):
         pass
 
     def test_can_prepend(self):

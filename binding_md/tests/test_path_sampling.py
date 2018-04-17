@@ -125,13 +125,13 @@ class TestMultipleBindingEnsemble(object):
         assert self.bound_state(bound_frame)
         assert self.unbound_state(unbound_frame)
         assert self.excluded_volume(excl_vol_frame)
-        assert not self.excluded_volume(unbound_frame)
-        assert not self.excluded_volume(contact_frame)
         assert self.excluded_volume(bound_frame)
         assert not self.bound_state(excl_vol_frame)
+        assert not self.excluded_volume(unbound_frame)
+        assert not self.excluded_volume(contact_frame)
 
     @staticmethod
-    def _generic_forward_tester(traj_str, method, test_conditions, is_check):
+    def _generic_fwd_tester(traj_str, method, test_conditions, is_check):
         trajectory = make_trajectory(traj_str)
         for last_idx in range(len(trajectory)):
             subtraj = trajectory[0:last_idx+1]
@@ -152,37 +152,61 @@ class TestMultipleBindingEnsemble(object):
         # equiv to:
         #   if len(subtraj) < len(trajectory): return result == True
         #   else: return result == False
-        self._generic_forward_tester(traj_str=traj,
-                                     method=self.ensemble.can_append,
-                                     test_conditions=test_conditions,
-                                     is_check=False)
+        self._generic_fwd_tester(traj_str=traj,
+                                 method=self.ensemble.can_append,
+                                 test_conditions=test_conditions,
+                                 is_check=False)
 
     @pytest.mark.parametrize('traj', ['bocxcc'])
     def test_can_append_reject(self, traj):
         test_conditions = lambda result, subtraj, trajectory: \
                 result == True
-        self._generic_forward_tester(traj_str=traj,
-                                     method=self.ensemble.can_append,
-                                     test_conditions=test_conditions,
-                                     is_check=False)
+        self._generic_fwd_tester(traj_str=traj,
+                                 method=self.ensemble.can_append,
+                                 test_conditions=test_conditions,
+                                 is_check=False)
 
     def test_can_prepend(self):
         pytest.skip("Not implemented")
 
-    @pytest.mark.parametrize('traj', ['bocxu', 'bxcocc', 'xcxcocococc'])
-    def test_check_forward(self, traj):
+    @pytest.mark.parametrize('traj', ['bocxu', 'bxcocc', 'bxcxcocococc'])
+    def test_check_forward_accept(self, traj):
         test_conditions = lambda result, subtraj, trajectory: \
                 result == (len(subtraj) == len(trajectory))
-        self._generic_forward_tester(traj_str=traj,
-                                     method=self.ensemble,
-                                     test_conditions=test_conditions,
-                                     is_check=True)
+        self._generic_fwd_tester(traj_str=traj,
+                                 method=self.ensemble,
+                                 test_conditions=test_conditions,
+                                 is_check=True)
+
+    @pytest.mark.parametrize('traj', ['u', 'b', 'xxccco', 'bccc'])
+    def test_check_forward_reject(self, traj):
+        test_conditions = lambda result, subtraj, trajectory: \
+                result == False
+        self._generic_fwd_tester(traj_str=traj,
+                                 method=self.ensemble,
+                                 test_conditions=test_conditions,
+                                 is_check=True)
 
     def test_check_reverse(self):
         pytest.skip("Not implemented")
 
-    def test_strict_can_append(self):
-        pass
+    @pytest.mark.parametrize('traj', ['bocxu', 'bxcocc', 'u', 'x'])
+    def test_strict_can_append_accept(self, traj):
+        test_conditions = lambda result, subtraj, trajectory: \
+                result == (len(subtraj) < len(trajectory))
+        self._generic_fwd_tester(traj_str=traj,
+                                 method=self.ensemble.strict_can_append,
+                                 test_conditions=test_conditions,
+                                 is_check=False)
+
+    @pytest.mark.parametrize('traj', ['bccc', 'boxxcx'])
+    def test_strict_can_append_reject(self, traj):
+        test_conditions = lambda result, subtraj, trajectory: \
+                result == True
+        self._generic_fwd_tester(traj_str=traj,
+                                 method=self.ensemble.strict_can_append,
+                                 test_conditions=test_conditions,
+                                 is_check=False)
 
     def test_strict_can_prepend(self):
         pytest.skip("Not implemented")

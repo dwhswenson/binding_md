@@ -410,6 +410,9 @@ class MultipleBindingEnsemble(paths.Ensemble):
         # TODO
 
     def __call__(self, trajectory, trusted=None, candidate=False):
+        if not self.initial_state(trajectory[0]):
+            return False
+
         if candidate:
             result = self._trusted_analysis(trajectory=trajectory,
                                             state=self.final_state,

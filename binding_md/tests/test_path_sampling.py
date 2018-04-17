@@ -4,6 +4,9 @@ import mdtraj as md
 from .utils import *
 from binding_md.path_sampling import *
 
+logger.addHandler(logging.StreamHandler())
+ops_logger = logging.getLogger('openpathsampling')
+ops_logger.setLevel(logging.INFO)
 
 def setup_module():
     global bound_frame, unbound_frame, contact_frame, excl_vol_frame, \
@@ -25,6 +28,7 @@ def setup_module():
     )
     stable_contact_state.haystack = [0, 1, 2, 3]
     stable_contact_state.cutoff = 0.075
+    logging.basicConfig()
 
 def make_trajectory(string_representation):
     str2frame = {"B": bound_frame,
@@ -116,16 +120,6 @@ class TestMultipleBindingEnsemble(object):
             stable_contact_state=stable_contact_state,
             excluded_volume=self.excluded_volume
         )
-        self.ensemble_with_cache = MultipleBindingEnsemble(
-            initial_state=self.bound_state,
-            known_states=[self.bound_state, self.unbound_state],
-            stable_contact_state=stable_contact_state,
-            excluded_volume=self.excluded_volume
-        )
-        self.accept = {key: make_trajectory(key)
-                       for key in ['bocxu', 'bxcocc']}
-        self.reject = {key: make_trajectory(key)
-                       for key in ['bocxcc']}
 
     def test_setup_sanity(self):
         assert self.bound_state(bound_frame)
@@ -134,26 +128,61 @@ class TestMultipleBindingEnsemble(object):
         assert not self.excluded_volume(unbound_frame)
         assert not self.excluded_volume(contact_frame)
         assert self.excluded_volume(bound_frame)
+        assert not self.bound_state(excl_vol_frame)
 
-    @pytest.mark.parametrize('traj', ['bocxu', 'bxcocc'])
+    @staticmethod
+    def _generic_forward_tester(traj_str, method, test_conditions, is_check):
+        trajectory = make_trajectory(traj_str)
+        for last_idx in range(len(trajectory)):
+            subtraj = trajectory[0:last_idx+1]
+            if is_check:
+                result = method(subtraj)
+            else:
+                trusted = method(subtraj, trusted=True)
+                untrusted = method(subtraj, trusted=False)
+                assert trusted == untrusted
+                result = trusted
+            assert test_conditions(result, subtraj, trajectory)
+
+    @pytest.mark.parametrize('traj', ['u', 'bocxu', 'bxcocc', 'xccxccco',
+                                      'xcxcocococc'])
     def test_can_append_accept(self, traj):
-        pass
+        test_conditions = lambda result, subtraj, trajectory: \
+                result == (len(subtraj) < len(trajectory))
+        # equiv to:
+        #   if len(subtraj) < len(trajectory): return result == True
+        #   else: return result == False
+        self._generic_forward_tester(traj_str=traj,
+                                     method=self.ensemble.can_append,
+                                     test_conditions=test_conditions,
+                                     is_check=False)
 
     @pytest.mark.parametrize('traj', ['bocxcc'])
     def test_can_append_reject(self, traj):
-        pass
+        test_conditions = lambda result, subtraj, trajectory: \
+                result == True
+        self._generic_forward_tester(traj_str=traj,
+                                     method=self.ensemble.can_append,
+                                     test_conditions=test_conditions,
+                                     is_check=False)
 
     def test_can_prepend(self):
-        pass
+        pytest.skip("Not implemented")
 
-    def test_check_forward(self):
-        pass
+    @pytest.mark.parametrize('traj', ['bocxu', 'bxcocc', 'xcxcocococc'])
+    def test_check_forward(self, traj):
+        test_conditions = lambda result, subtraj, trajectory: \
+                result == (len(subtraj) == len(trajectory))
+        self._generic_forward_tester(traj_str=traj,
+                                     method=self.ensemble,
+                                     test_conditions=test_conditions,
+                                     is_check=True)
 
     def test_check_reverse(self):
-        pass
+        pytest.skip("Not implemented")
 
     def test_strict_can_append(self):
         pass
 
     def test_strict_can_prepend(self):
-        pass
+        pytest.skip("Not implemented")

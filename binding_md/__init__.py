@@ -6,3 +6,5 @@ from path_sampling import (
     MultipleBindingShootingPointSelector,
     StableContactsCommittorSimulation
 )
+
+from . import version

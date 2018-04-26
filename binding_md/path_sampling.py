@@ -265,9 +265,12 @@ class MultipleBindingEnsemble(paths.Ensemble):
         bool
         """
         direction = clean_direction(direction)
-        logger.info("Analysis: traj length %s, %s %s", len(trajectory),
-                    {1: "forward", -1: "backward"}[direction],
-                    {True: "check", False: "continuation"}[is_check])
+        method_str = "%{direction} %{method}".format(
+            direction={1: "forward", -1: "backward"}[direction],
+            method={True: "check", False: "continuation"}[is_check]
+        )  # used in logging
+        logger.info("Analysis: traj length %s, %s", len(trajectory),
+                    method_str)
         if len(trajectory) == 1:
             return (self._check_continue_one_frame(trajectory, direction)
                     and not is_check)
@@ -334,8 +337,7 @@ class MultipleBindingEnsemble(paths.Ensemble):
             in_ensemble = stable_res
 
         logger.info("* In stable contact state: " + keys[stable_res])
-        logger.info("is_check: " + str(is_check)
-                    + " |  in_ensemble: " + str(in_ensemble)
+        logger.info(method_str + " |  in_ensemble: " + str(in_ensemble)
                     + " |  returning: " + str(is_check == in_ensemble))
         # if is_check is False (i.e., doing can_append/prepend) then the
         # test is successful if we *are not* in the ensemble. If is_check is

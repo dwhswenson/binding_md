@@ -36,7 +36,7 @@ def make_trajectory(string_representation):
                  "C": contact_frame,
                  "X": excl_vol_frame,
                  "O": other_frame}
-    return paths.Trajectory([str2frame[char]
+    return paths.Trajectory([str2frame[char].copy()
                              for char in string_representation.upper()])
 
 def test_clean_direction():
@@ -130,11 +130,13 @@ class TestMultipleBindingEnsemble(object):
         assert not self.excluded_volume(unbound_frame)
         assert not self.excluded_volume(contact_frame)
 
+
     @staticmethod
     def _generic_tester(traj_str, method, test_conditions, is_check,
                         direction):
         trajectory = make_trajectory(traj_str)
         for last_idx in range(len(trajectory)):
+            logger.debug("RUNNING TEST ON TRAJ LEN %d", last_idx+1)
             subtraj_slice = {FWD: slice(0, last_idx+1),
                              BKWD: slice(-last_idx-1, None)}[direction]
             subtraj = trajectory[subtraj_slice]
@@ -143,8 +145,8 @@ class TestMultipleBindingEnsemble(object):
                 result = method(subtraj)
             else:
                 trusted = method(subtraj, trusted=True)
-                # untrusted = method(subtraj, trusted=False)
-                # assert trusted == untrusted
+                untrusted = method(subtraj, trusted=False)
+                assert trusted == untrusted
                 result = trusted
             assert test_conditions(result, subtraj, trajectory)
 
@@ -172,7 +174,8 @@ class TestMultipleBindingEnsemble(object):
                              is_check=False,
                              direction=FWD)
 
-    @pytest.mark.parametrize('traj', ['bocxu', 'bxcocc', 'bocxcc', 'uoxu'])
+    @pytest.mark.parametrize('traj', ['bocxu', 'bxcocc', 'bocxcc', 'uoxu',
+                                      'cccooooccc', 'coccoc'])
     def test_can_prepend_final_stop(self, traj):
         test_conditions = lambda result, subtraj, trajectory: \
                 result == (len(subtraj) < len(trajectory))
@@ -182,9 +185,15 @@ class TestMultipleBindingEnsemble(object):
                              is_check=False,
                              direction=BKWD)
 
-                                      # 'xccxccco', 'xcxcocococc', 
-    def test_can_prepend_final_no_stop(self):
-        pytest.skip()
+    @pytest.mark.parametrize('traj', ['xccxccco', 'xcxcocococc', 'cccc'])
+    def test_can_prepend_final_no_stop(self, traj):
+        test_conditions = lambda result, subtraj, trajectory: \
+                result == True
+        self._generic_tester(traj_str=traj,
+                             method=self.ensemble.can_prepend,
+                             test_conditions=test_conditions,
+                             is_check=False,
+                             direction=BKWD)
 
     @pytest.mark.parametrize('traj', ['bocxu', 'bxcocc', 'bxcxcocococc'])
     def test_check_forward_accept(self, traj):
@@ -210,7 +219,7 @@ class TestMultipleBindingEnsemble(object):
         pytest.skip("Not implemented")
 
     @pytest.mark.parametrize('traj', ['bocxu', 'bxcocc', 'u', 'x'])
-    def test_strict_can_append_accept(self, traj):
+    def test_strict_can_append_stop(self, traj):
         test_conditions = lambda result, subtraj, trajectory: \
                 result == (len(subtraj) < len(trajectory))
         self._generic_tester(traj_str=traj,
@@ -220,7 +229,7 @@ class TestMultipleBindingEnsemble(object):
                              direction=FWD)
 
     @pytest.mark.parametrize('traj', ['bccc', 'boxxcx'])
-    def test_strict_can_append_reject(self, traj):
+    def test_strict_can_append_no_stop(self, traj):
         test_conditions = lambda result, subtraj, trajectory: \
                 result == True
         self._generic_tester(traj_str=traj,
@@ -229,5 +238,8 @@ class TestMultipleBindingEnsemble(object):
                              is_check=False,
                              direction=FWD)
 
-    def test_strict_can_prepend(self):
+    def test_strict_can_prepend_stop(self):
+        pytest.skip("Not implemented")
+
+    def test_strict_can_prepend_no_stop(self):
         pytest.skip("Not implemented")

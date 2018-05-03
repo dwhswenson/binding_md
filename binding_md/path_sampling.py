@@ -144,6 +144,7 @@ class MultipleBindingEnsembleCache(object):
     def reset(self, trajectory):
         """Reset the cache for a new trajectory
         """
+        logger.debug("Resetting the cache in %s", self)
         self.last_trajectory_length = len(trajectory)
         if self.last_trajectory_length == 0:
             self.initial_frame = None
@@ -194,8 +195,8 @@ class MultipleBindingEnsembleCache(object):
             self.contact_frequency.subtract_contact_frequency(sub_freq)
 
         _debug_most_common()
-        logger.debug("Contact frequency based on length %d",
-                     self.contact_frequency.n_frames)
+        logger.debug("Contact frequency based on length %d, total length %d",
+                     self.contact_frequency.n_frames, len(trajectory))
         logger.debug("END MultipleBindingEnsembleCache._update")
 
 
@@ -336,12 +337,15 @@ class MultipleBindingEnsemble(paths.Ensemble):
             stable_res = stable_contact_check(trajectory, cache=cache)
             should_stop = stable_res
 
+        logger.info("* In stable contact state: " + keys[stable_res])
+
         if direction == BKWD and stable_res:
             # if the entire trajectory is just the stuff in the stable
             # contacts, we can prepend
+            logger.debug("backward stable, len(trajectory): %s",
+                         len(trajectory))
             should_stop = (n_frames < len(trajectory))
 
-        logger.info("* In stable contact state: " + keys[stable_res])
         logger.info(method_str + " |  should_stop: " + str(should_stop)
                     + " |  returning: " + str(is_check == should_stop))
         # if is_check is False (i.e., doing can_append/prepend) then the
@@ -390,9 +394,10 @@ class MultipleBindingEnsemble(paths.Ensemble):
         return allowed(frame) or not forbidden(frame)
 
     def _can_extend(self, trajectory, trusted, direction):
-        logger.debug("can_%s; %strusted",
+        logger.debug("can_%s; %strusted; %s",
                      {FWD: "append", BKWD: "prepend"}[direction],
-                     {True: "", False: "un"}[trusted])
+                     {True: "", False: "un"}[trusted],
+                     trajectory)
         if trusted:
             result = self._trusted_analysis(trajectory=trajectory,
                                             state=self.states,
@@ -447,7 +452,11 @@ class MultipleBindingEnsemble(paths.Ensemble):
                 and self.can_append(trajectory, trusted))
 
     def strict_can_prepend(self, trajectory, trusted=False):
-        pass #TODO
+        n_frames = self.stable_contact_state.n_frames
+        subtraj = trajectory[slice(-n_frames, None)]
+        return (self.stable_contact_state.check_end(trajectory)
+                and self.excluded_volume_ensemble(subtraj)
+                and self.can_prepend(trajectory, trusted))
 
     def check_reverse(self, trajectory, trusted=False):
         pass

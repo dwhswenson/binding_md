@@ -265,7 +265,7 @@ class MultipleBindingEnsemble(paths.Ensemble):
         bool
         """
         direction = clean_direction(direction)
-        method_str = "%{direction} %{method}".format(
+        method_str = "{direction} {method}".format(
             direction={1: "forward", -1: "backward"}[direction],
             method={True: "check", False: "continuation"}[is_check]
         )  # used in logging
@@ -306,7 +306,7 @@ class MultipleBindingEnsemble(paths.Ensemble):
 
         # This is the short form of the code used below. The longer version
         # (with explicit short-circuits) is used to make logging better.
-        # in_ensemble = (
+        # should_stop = (
             # state(trajectory[frame_idx])
             # or (
                 # excluded_volume_check(trajectory[subtraj_slice])
@@ -314,35 +314,40 @@ class MultipleBindingEnsemble(paths.Ensemble):
             # )
         # )
 
-        in_ensemble = None
+        should_stop = None
         keys = {True: "True", False: "False", None: "Skipped"} # logging
         state_res = state(trajectory[frame_idx])
         excl_vol_res = None
         stable_res = None
         if state_res:
-            in_ensemble = state_res
+            should_stop = state_res
 
         logger.info("* In known state: " + keys[state_res])
 
-        if in_ensemble is None:
+        if should_stop is None:
             subtraj = trajectory[subtraj_slice]
             excl_vol_res = excluded_volume_check(subtraj)
             if not excl_vol_res:
-                in_ensemble = False
+                should_stop = False
 
         logger.info("* Outside excluded volume: " + keys[excl_vol_res])
 
-        if in_ensemble is None:
+        if should_stop is None:
             stable_res = stable_contact_check(trajectory, cache=cache)
-            in_ensemble = stable_res
+            should_stop = stable_res
+
+        if direction == BKWD and stable_res:
+            # if the entire trajectory is just the stuff in the stable
+            # contacts, we can prepend
+            should_stop = (n_frames < len(trajectory))
 
         logger.info("* In stable contact state: " + keys[stable_res])
-        logger.info(method_str + " |  in_ensemble: " + str(in_ensemble)
-                    + " |  returning: " + str(is_check == in_ensemble))
+        logger.info(method_str + " |  should_stop: " + str(should_stop)
+                    + " |  returning: " + str(is_check == should_stop))
         # if is_check is False (i.e., doing can_append/prepend) then the
         # test is successful if we *are not* in the ensemble. If is_check is
         # True, then the test is successful if we *are* in the ensemble
-        return is_check == in_ensemble
+        return is_check == should_stop
 
     def _untrusted_can_continue(self, trajectory, state, direction):
         """Can-append/prepend for untrusted trajectories
@@ -384,32 +389,35 @@ class MultipleBindingEnsemble(paths.Ensemble):
         frame = trajectory[0]
         return allowed(frame) or not forbidden(frame)
 
-    def can_append(self, trajectory, trusted=None):
+    def _can_extend(self, trajectory, trusted, direction):
+        logger.debug("can_%s; %strusted",
+                     {FWD: "append", BKWD: "prepend"}[direction],
+                     {True: "", False: "un"}[trusted])
         if trusted:
-            logger.debug("can_append trusted")
             result = self._trusted_analysis(trajectory=trajectory,
                                             state=self.states,
-                                            direction=FWD,
+                                            direction=direction,
                                             is_check=False,
-                                            cache=self.cache[FWD])
+                                            cache=self.cache[direction])
         else:
-            logger.debug("can_append untrusted")
             subtraj, cache = self._untrusted_can_continue(
                 trajectory=trajectory,
                 state=self.states,
-                direction=FWD
+                direction=direction
             )
             result = (len(subtraj) == len(trajectory)
                       and self._trusted_analysis(trajectory=subtraj,
                                                  state=self.states,
-                                                 direction=FWD,
+                                                 direction=direction,
                                                  is_check=False,
                                                  cache=cache))
         return result
 
+    def can_append(self, trajectory, trusted=None):
+        return self._can_extend(trajectory, trusted, direction=FWD)
+
     def can_prepend(self, trajectory, trusted=None):
-        pass
-        # TODO
+        return self._can_extend(trajectory, trusted, direction=BKWD)
 
     def __call__(self, trajectory, trusted=None, candidate=False):
         if not self.initial_state(trajectory[0]):
@@ -440,6 +448,9 @@ class MultipleBindingEnsemble(paths.Ensemble):
 
     def strict_can_prepend(self, trajectory, trusted=False):
         pass #TODO
+
+    def check_reverse(self, trajectory, trusted=False):
+        pass
 
 
 class MultipleBindingShootingPointSelector(paths.ShootingPointSelector):

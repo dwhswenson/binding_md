@@ -84,6 +84,18 @@ class TestStableContactsState(object):
 
 
 class TestMultipleBindingEnsemble(object):
+    conditions = {
+        'ext_stop': lambda result, subtraj, trajectory: \
+            result == (len(subtraj) < len(trajectory)),
+            # equiv to:
+            #   if len(subtraj) < len(trajectory): return result == True
+            #   else: return result == False
+        'ext_nostop': lambda result, subtraj, trajectory: result == True,
+        'check_acc': lambda result, subtraj, trajectory: \
+            result == (len(subtraj) == len(trajectory)),
+        'check_rej': lambda result, subtraj, trajectory: result == False
+    }
+
     def setup(self):
         distance_pairs = list(itertools.product(range(4), range(4, 6)))
         dist = {
@@ -130,7 +142,6 @@ class TestMultipleBindingEnsemble(object):
         assert not self.excluded_volume(unbound_frame)
         assert not self.excluded_volume(contact_frame)
 
-
     @staticmethod
     def _generic_tester(traj_str, method, test_conditions, is_check,
                         direction):
@@ -152,94 +163,89 @@ class TestMultipleBindingEnsemble(object):
 
     @pytest.mark.parametrize('traj', ['u', 'bocxu', 'bxcocc', 'xccxccco',
                                       'xcxcocococc'])
-    def test_can_append_final_stop(self, traj):
-        test_conditions = lambda result, subtraj, trajectory: \
-                result == (len(subtraj) < len(trajectory))
-        # equiv to:
-        #   if len(subtraj) < len(trajectory): return result == True
-        #   else: return result == False
+    def test_can_append_stop(self, traj):
         self._generic_tester(traj_str=traj,
                              method=self.ensemble.can_append,
-                             test_conditions=test_conditions,
+                             test_conditions=self.conditions['ext_stop'],
                              is_check=False,
                              direction=FWD)
 
     @pytest.mark.parametrize('traj', ['bocxcc'])
-    def test_can_append_final_no_stop(self, traj):
-        test_conditions = lambda result, subtraj, trajectory: \
-                result == True
+    def test_can_append_no_stop(self, traj):
         self._generic_tester(traj_str=traj,
                              method=self.ensemble.can_append,
-                             test_conditions=test_conditions,
+                             test_conditions=self.conditions['ext_nostop'],
                              is_check=False,
                              direction=FWD)
 
     @pytest.mark.parametrize('traj', ['bocxu', 'bxcocc', 'bocxcc', 'uoxu',
                                       'cccooooccc', 'coccoc'])
-    def test_can_prepend_final_stop(self, traj):
-        test_conditions = lambda result, subtraj, trajectory: \
-                result == (len(subtraj) < len(trajectory))
+    def test_can_prepend_stop(self, traj):
         self._generic_tester(traj_str=traj,
                              method=self.ensemble.can_prepend,
-                             test_conditions=test_conditions,
+                             test_conditions=self.conditions['ext_stop'],
                              is_check=False,
                              direction=BKWD)
 
     @pytest.mark.parametrize('traj', ['xccxccco', 'xcxcocococc', 'cccc'])
-    def test_can_prepend_final_no_stop(self, traj):
-        test_conditions = lambda result, subtraj, trajectory: \
-                result == True
+    def test_can_prepend_no_stop(self, traj):
         self._generic_tester(traj_str=traj,
                              method=self.ensemble.can_prepend,
-                             test_conditions=test_conditions,
+                             test_conditions=self.conditions['ext_nostop'],
                              is_check=False,
                              direction=BKWD)
 
     @pytest.mark.parametrize('traj', ['bocxu', 'bxcocc', 'bxcxcocococc'])
     def test_check_forward_accept(self, traj):
-        test_conditions = lambda result, subtraj, trajectory: \
-                result == (len(subtraj) == len(trajectory))
         self._generic_tester(traj_str=traj,
                              method=self.ensemble,
-                             test_conditions=test_conditions,
+                             test_conditions=self.conditions['check_acc'],
                              is_check=True,
                              direction=FWD)
 
     @pytest.mark.parametrize('traj', ['u', 'b', 'xxccco', 'bccc'])
     def test_check_forward_reject(self, traj):
-        test_conditions = lambda result, subtraj, trajectory: \
-                result == False
         self._generic_tester(traj_str=traj,
                              method=self.ensemble,
-                             test_conditions=test_conditions,
+                             test_conditions=self.conditions['check_rej'],
                              is_check=True,
                              direction=FWD)
 
-    def test_check_reverse(self):
+    def test_check_reverse_accept(self):
+        pytest.skip("Not implemented")
+
+    def test_check_reverse_reject(self):
         pytest.skip("Not implemented")
 
     @pytest.mark.parametrize('traj', ['bocxu', 'bxcocc', 'u', 'x'])
     def test_strict_can_append_stop(self, traj):
-        test_conditions = lambda result, subtraj, trajectory: \
-                result == (len(subtraj) < len(trajectory))
         self._generic_tester(traj_str=traj,
                              method=self.ensemble.strict_can_append,
-                             test_conditions=test_conditions,
+                             test_conditions=self.conditions['ext_stop'],
                              is_check=False,
                              direction=FWD)
 
     @pytest.mark.parametrize('traj', ['bccc', 'boxxcx'])
     def test_strict_can_append_no_stop(self, traj):
-        test_conditions = lambda result, subtraj, trajectory: \
-                result == True
         self._generic_tester(traj_str=traj,
                              method=self.ensemble.strict_can_append,
-                             test_conditions=test_conditions,
+                             test_conditions=self.conditions['ext_nostop'],
                              is_check=False,
                              direction=FWD)
 
-    def test_strict_can_prepend_stop(self):
-        pytest.skip("Not implemented")
+    @pytest.mark.parametrize('traj', ['coccoc', 'cccooooccc', 'boccc',
+                                      'uococc', 'bocxu', 'bxcocc', 'uoxu'])
+    def test_strict_can_prepend_stop(self, traj):
+        self._generic_tester(traj_str=traj,
+                             method=self.ensemble.strict_can_prepend,
+                             test_conditions=self.conditions['ext_stop'],
+                             is_check=False,
+                             direction=BKWD)
 
-    def test_strict_can_prepend_no_stop(self):
-        pytest.skip("Not implemented")
+    @pytest.mark.parametrize('traj', ['xccxccco', 'xcxcocococc', 'cccc'])
+    def test_strict_can_prepend_no_stop(self, traj):
+        self._generic_tester(traj_str=traj,
+                             method=self.ensemble.strict_can_prepend,
+                             test_conditions=self.conditions['ext_nostop'],
+                             is_check=False,
+                             direction=BKWD)

@@ -186,15 +186,14 @@ class MultipleBindingEnsembleCache(object):
         _debug_most_common()
 
         if len(trajectory) > n_frames:
-            sub_frame = {FWD: trajectory[-n_frames - 1],
-                         BKWD: trajectory[n_frames]}[direction]
+            sub_index = {FWD: -n_frames - 1, BKWD: n_frames}[direction]
+            sub_frame = trajectory[sub_index]
             sub_freq = self._make_contact_freq(paths.Trajectory([sub_frame]))
-            if logger.isEnabledFor(logging.debug):
-                logger.debug("Subtracting frame %d from contact frequency",
-                             trajectory.index(sub_frame))
+            logger.debug("Subtracting frame %d from contact frequency",
+                         sub_index)
             self.contact_frequency.subtract_contact_frequency(sub_freq)
+            _debug_most_common()
 
-        _debug_most_common()
         logger.debug("Contact frequency based on length %d, total length %d",
                      self.contact_frequency.n_frames, len(trajectory))
         logger.debug("END MultipleBindingEnsembleCache._update")
@@ -453,9 +452,26 @@ class MultipleBindingEnsemble(paths.Ensemble):
 
     def strict_can_prepend(self, trajectory, trusted=False):
         n_frames = self.stable_contact_state.n_frames
+        if len(trajectory) < n_frames:
+            # NOTE: technically we might be able to abort earlier on these
+            # short trajectories, but I'm not going to implement that now
+            # (requires checking the freq of contacts and comparing with
+            # possibility of ever having enough)
+            no_known_state_ens = paths.AllOutXEnsemble(self.states)
+            final_frame_allowed = not self.initial_state(trajectory[-1])
+            other_frames_allowed = (no_known_state_ens(trajectory[:-1])
+                                    or len(trajectory) == 1)
+            logger.debug("final_frame_allowed: %s;  other_frames_allowed: %s",
+                         final_frame_allowed, other_frames_allowed)
+            return final_frame_allowed and other_frames_allowed
+
+        known_state = self.final_state(trajectory[-1])
         subtraj = trajectory[slice(-n_frames, None)]
-        return (self.stable_contact_state.check_end(trajectory)
-                and self.excluded_volume_ensemble(subtraj)
+        stable_contacts = (self.stable_contact_state.check_end(trajectory)
+                           and self.excluded_volume_ensemble(subtraj))
+        logger.debug("ends in known state: %s; ends in stable contacts: %s",
+                     known_state, stable_contacts)
+        return ((known_state or stable_contacts) 
                 and self.can_prepend(trajectory, trusted))
 
     def check_reverse(self, trajectory, trusted=False):

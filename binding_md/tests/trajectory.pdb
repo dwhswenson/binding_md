@@ -1,0 +1,50 @@
+REMARK 225 HAND-WRITTEN TEST TRAJECTORY
+REMARK 225 ACTUAL TESTS RECOMBINE THESE FRAMES
+REMARK 225 COMMENTS HERE COUNT FROM 1 (CODE COUNTS FROM 0, PDB FROM 1)
+REMARK 225 * FRAME 1: BOUND STATE
+REMARK 225 * FRAME 2: STILL IN EXCLUDED VOLUME
+REMARK 225 * FRAME 3: CONTACT
+REMARK 225 * FRAME 4: UNBOUND STATE
+REMARK 225 * FRAME 5: OTHER (NOTHING SPECIAL)
+REMARK 225
+CRYST1   25.000   25.000   25.000  90.00  90.00  90.00 P 1          1
+HETATM    1  C1  AAA A   1       0.250   0.750   0.000  1.00  0.00           C
+HETATM    2  C2  AAA A   1       0.250   1.250   0.000  1.00  0.00           C
+HETATM    3  C3  AAA A   1       0.250   1.750   0.000  1.00  0.00           C
+HETATM    4  C4  AAA A   1       0.250   2.250   0.000  1.00  0.00           C
+HETATM    5  C1  BBB B   2       0.750   0.750   0.000  1.00  0.00           C
+HETATM    6  C2  BBB B   2       0.750   1.250   0.000  1.00  0.00           C
+ENDMDL
+CRYST1   25.000   25.000   25.000  90.00  90.00  90.00 P 1          1
+HETATM    1  C1  AAA A   1       0.250   0.750   0.000  1.00  0.00           C
+HETATM    2  C2  AAA A   1       0.250   1.250   0.000  1.00  0.00           C
+HETATM    3  C3  AAA A   1       0.250   1.750   0.000  1.00  0.00           C
+HETATM    4  C4  AAA A   1       0.250   2.250   0.000  1.00  0.00           C
+HETATM    5  C1  BBB B   2       0.750   1.200   0.000  1.00  0.00           C
+HETATM    6  C2  BBB B   2       0.750   1.700   0.000  1.00  0.00           C
+ENDMDL
+CRYST1   25.000   25.000   25.000  90.00  90.00  90.00 P 1          1
+HETATM    1  C1  AAA A   1       0.250   0.750   0.000  1.00  0.00           C
+HETATM    2  C2  AAA A   1       0.250   1.250   0.000  1.00  0.00           C
+HETATM    3  C3  AAA A   1       0.250   1.750   0.000  1.00  0.00           C
+HETATM    4  C4  AAA A   1       0.250   2.250   0.000  1.00  0.00           C
+HETATM    5  C1  BBB B   2       0.750   2.000   0.000  1.00  0.00           C
+HETATM    6  C2  BBB B   2       0.750   2.500   0.000  1.00  0.00           C
+ENDMDL
+CRYST1   25.000   25.000   25.000  90.00  90.00  90.00 P 1          1
+HETATM    1  C1  AAA A   1       0.250   0.750   0.000  1.00  0.00           C
+HETATM    2  C2  AAA A   1       0.250   1.250   0.000  1.00  0.00           C
+HETATM    3  C3  AAA A   1       0.250   1.750   0.000  1.00  0.00           C
+HETATM    4  C4  AAA A   1       0.250   2.250   0.000  1.00  0.00           C
+HETATM    5  C1  BBB B   2       3.750   0.750   0.000  1.00  0.00           C
+HETATM    6  C2  BBB B   2       3.750   1.250   0.000  1.00  0.00           C
+ENDMDL
+CRYST1   25.000   25.000   25.000  90.00  90.00  90.00 P 1          1
+HETATM    1  C1  AAA A   1       0.250   0.750   0.000  1.00  0.00           C
+HETATM    2  C2  AAA A   1       0.250   1.250   0.000  1.00  0.00           C
+HETATM    3  C3  AAA A   1       0.250   1.750   0.000  1.00  0.00           C
+HETATM    4  C4  AAA A   1       0.250   2.250   0.000  1.00  0.00           C
+HETATM    5  C1  BBB B   2       1.750   1.250   0.000  1.00  0.00           C
+HETATM    6  C2  BBB B   2       1.750   1.750   0.000  1.00  0.00           C
+ENDMDL
+END

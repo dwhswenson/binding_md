@@ -529,7 +529,8 @@ class NetworkFromTransitions(paths.TransitionNetwork):
     def __init__(self, sampling_transitions, transitions):
         super(NetworkFromTransitions, self).__init__()
         self._sampling_transitions = sampling_transitions
-        self.transitions=transitions
+        self.transitions = {(t.stateA, t.stateB): t for t in transitions}
+        self.special_ensemble = {None: {}}
 
 
 class SingleEnsembleNetwork(NetworkFromTransitions):

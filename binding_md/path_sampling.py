@@ -491,17 +491,18 @@ class MultipleBindingShootingPointSelector(paths.ShootingPointSelector):
         self._cached_traj = paths.Trajectory([])
 
     def _get_subtrajectory(self, trajectory):
-        if trajectory == self._cached_traj:
-            return self._cached_subtraj
-        else:
+        if trajectory != self._cached_traj:
             ens = self.multiple_binding_ensemble  # convenience
+            n_frames = ens.stable_contact_state.n_frames
+            self._cached_traj = trajectory
             # note that we assume that the trajectory satisfies the
             # ensemble; if not, something has gone wrong in sampling
             if ens.states(trajectory[-1]):
-                return trajectory
+                self._cached_subtraj = trajectory
             else:
                 # the +1 keeps the padding correct
-                return trajectory[0:-ens.stable_contact_state.n_frames+1]
+                self._cached_subtraj = trajectory[0:-n_frames+1]
+        return self._cached_subtraj
 
     def f(self, snapshot, trajectory):
         subtraj = self._get_subtrajectory(trajectory)
@@ -529,6 +530,17 @@ class NetworkFromTransitions(paths.TransitionNetwork):
         super(NetworkFromTransitions, self).__init__()
         self._sampling_transitions = sampling_transitions
         self.transitions=transitions
+
+
+class SingleEnsembleNetwork(NetworkFromTransitions):
+    def __init__(self, ensemble):
+        transition = SingleEnsembleTransition(ensemble,
+                                              ensemble.initial_state,
+                                              ensemble.final_state)
+        super(SingleEnsembleNetwork, self).__init__(
+            sampling_transitions=[transition],
+            transitions=[transition]
+        )
 
 
 class StableContactsCommittorSimulation(paths.ShootFromSnapshotsSimulation):

@@ -480,6 +480,7 @@ class MultipleBindingEnsemble(paths.Ensemble):
 
 class MultipleBindingShootingPointSelector(paths.ShootingPointSelector):
     def __init__(self, multiple_binding_ensemble, subselector=None):
+        super(MultipleBindingShootingPointSelector, self).__init__()
         self.multiple_binding_ensemble = multiple_binding_ensemble
         if subselector is None:
             subselector = paths.UniformSelector()
@@ -530,7 +531,7 @@ class NetworkFromTransitions(paths.TransitionNetwork):
         super(NetworkFromTransitions, self).__init__()
         self._sampling_transitions = sampling_transitions
         self.transitions = {(t.stateA, t.stateB): t for t in transitions}
-        self.special_ensemble = {None: {}}
+        self.special_ensembles = {None: {}}
 
 
 class SingleEnsembleNetwork(NetworkFromTransitions):

@@ -471,7 +471,7 @@ class MultipleBindingEnsemble(paths.Ensemble):
                            and self.excluded_volume_ensemble(subtraj))
         logger.debug("ends in known state: %s; ends in stable contacts: %s",
                      known_state, stable_contacts)
-        return ((known_state or stable_contacts) 
+        return ((known_state or stable_contacts)
                 and self.can_prepend(trajectory, trusted))
 
     def check_reverse(self, trajectory, trusted=False):
@@ -525,13 +525,26 @@ class SingleEnsembleTransition(paths.Transition):
         super(SingleEnsembleTransition, self).__init__(stateA, stateB)
         self.ensembles = [ensemble]
 
+
 class NetworkFromTransitions(paths.TransitionNetwork):
     # this is really how paths.TransitionNetwork should work
-    def __init__(self, sampling_transitions, transitions):
+    def __init__(self, sampling_transitions, transitions,
+                 special_ensembles=None):
         super(NetworkFromTransitions, self).__init__()
+        if not isinstance(transitions, dict):
+            transitions = {(t.stateA, t.stateB): t for t in transitions}
+
+        if special_ensembles is None:
+            special_ensembles = {None: {}}
+
+        self.transitions = transitions
+        self.special_ensembles = special_ensembles
         self._sampling_transitions = sampling_transitions
-        self.transitions = {(t.stateA, t.stateB): t for t in transitions}
-        self.special_ensembles = {None: {}}
+
+    def to_dict(self):
+        dct = super(NetworkFromTransitions, self).to_dict()
+        dct.update({'sampling_transitions': self._sampling_transitions})
+        return dct
 
 
 class SingleEnsembleNetwork(NetworkFromTransitions):
@@ -543,6 +556,12 @@ class SingleEnsembleNetwork(NetworkFromTransitions):
             sampling_transitions=[transition],
             transitions=[transition]
         )
+
+    @classmethod
+    def from_dict(cls, dct):
+        obj = cls.__new__(cls)
+        super(SingleEnsembleNetwork, obj).__init__(**dct)
+        return obj
 
 
 class StableContactsCommittorSimulation(paths.ShootFromSnapshotsSimulation):

@@ -1,3 +1,4 @@
+import os
 import itertools
 import openpathsampling as paths
 import mdtraj as md
@@ -83,6 +84,57 @@ class TestStableContactsState(object):
             self.state(make_trajectory('ccc'))
 
 
+def volumes_and_ensemble():
+    results = {}
+    distance_pairs = list(itertools.product(range(4), range(4, 6)))
+    dist = {
+        pair: paths.MDTrajFunctionCV(
+            name="dist" + str(pair),
+            f=md.compute_distances,
+            topology=topology,
+            atom_pairs=[list(pair)]
+        )
+        for pair in distance_pairs
+    }
+
+    def min_dist_f(traj, pairs):
+        import mdtraj as md
+        return md.compute_distances(traj, atom_pairs=pairs).min(axis=1)
+
+    min_dist = paths.MDTrajFunctionCV(
+        name="min_dist",
+        topology=topology,
+        f=min_dist_f,
+        pairs=list(dist.keys()),
+        cv_scalarize_numpy_singletons=False
+    )
+    bound_state = (
+            paths.CVDefinedVolume(dist[(0, 4)], 0.0, 0.06)
+            and paths.CVDefinedVolume(dist[(1, 5)], 0.0, 0.06)
+    )
+    unbound_state = paths.CVDefinedVolume(min_dist, 0.2, float("inf"))
+    excluded_volume = (
+        paths.CVDefinedVolume(dist[(0, 4)], 0.0, 0.075)
+        and paths.CVDefinedVolume(dist[(0, 5)], 0.0, 0.075)
+        and paths.CVDefinedVolume(dist[(1, 4)], 0.0, 0.075)
+        and paths.CVDefinedVolume(dist[(1, 5)], 0.0, 0.075)
+    )
+
+    ensemble = MultipleBindingEnsemble(
+        initial_state=bound_state,
+        known_states=[bound_state, unbound_state],
+        stable_contact_state=stable_contact_state,
+        excluded_volume=excluded_volume
+    )
+    return {
+        'bound_state': bound_state,
+        'unbound_state': unbound_state,
+        'excluded_volume': excluded_volume,
+        'ensemble': ensemble
+    }
+
+
+
 class TestMultipleBindingEnsemble(object):
     conditions = {
         'ext_stop': lambda result, subtraj, trajectory: \
@@ -97,41 +149,11 @@ class TestMultipleBindingEnsemble(object):
     }
 
     def setup(self):
-        distance_pairs = list(itertools.product(range(4), range(4, 6)))
-        dist = {
-            pair: paths.MDTrajFunctionCV(
-                name="dist" + str(pair),
-                f=md.compute_distances,
-                topology=topology,
-                atom_pairs=[list(pair)]
-            )
-            for pair in distance_pairs
-        }
-        min_dist = paths.MDTrajFunctionCV(
-            name="min_dist",
-            topology=topology,
-            f=lambda traj, pairs: \
-                md.compute_distances(traj, atom_pairs=pairs).min(axis=1),
-            pairs=list(dist.keys()),
-            cv_scalarize_numpy_singletons=False
-        )
-        self.bound_state = paths.CVDefinedVolume(dist[(0, 4)], 0.0, 0.06) \
-                and paths.CVDefinedVolume(dist[(1, 5)], 0.0, 0.06)
-        self.unbound_state = paths.CVDefinedVolume(min_dist,
-                                                   0.2, float("inf"))
-        self.excluded_volume = (
-            paths.CVDefinedVolume(dist[(0, 4)], 0.0, 0.075)
-            and paths.CVDefinedVolume(dist[(0, 5)], 0.0, 0.075)
-            and paths.CVDefinedVolume(dist[(1, 4)], 0.0, 0.075)
-            and paths.CVDefinedVolume(dist[(1, 5)], 0.0, 0.075)
-        )
-
-        self.ensemble = MultipleBindingEnsemble(
-            initial_state=self.bound_state,
-            known_states=[self.bound_state, self.unbound_state],
-            stable_contact_state=stable_contact_state,
-            excluded_volume=self.excluded_volume
-        )
+        setup_dict = volumes_and_ensemble()
+        self.bound_state = setup_dict['bound_state']
+        self.unbound_state = setup_dict['unbound_state']
+        self.excluded_volume = setup_dict['excluded_volume']
+        self.ensemble = setup_dict['ensemble']
 
     def test_setup_sanity(self):
         assert self.bound_state(bound_frame)
@@ -249,3 +271,27 @@ class TestMultipleBindingEnsemble(object):
                              test_conditions=self.conditions['ext_nostop'],
                              is_check=False,
                              direction=BKWD)
+
+
+class TestStableContactNetwork(object):
+    def setup(self):
+        setup_dict = volumes_and_ensemble()
+        self.ensemble = setup_dict['ensemble']
+        self.network = SingleEnsembleNetwork(self.ensemble)
+        self.filename = find_testfile("test.nc")
+        if os.path.isfile(self.filename):
+            os.remove(self.filename)
+
+    def teardown(self):
+        if os.path.isfile(self.filename):
+            os.remove(self.filename)
+
+    def test_storage_cycle(self):
+        with paths.Storage(self.filename, 'w') as storage:
+            storage.save(self.network)
+            storage.sync()
+
+        with paths.Storage(self.filename, 'r') as storage:
+            new = storage.networks[0]
+
+        assert new == self.network

@@ -41,7 +41,7 @@ script:
   - export MPLBACKEND=PS
   - python -c "import binding_md"
   #- python autorelease_check.py --branch ${TRAVIS_BRANCH} --event ${TRAVIS_EVENT_TYPE}
-  - py.test -vv --cov=contact_map --cov-report xml:cov.xml
+  - py.test -vv --cov=binding_md --cov-report xml:cov.xml
 
 after_success:
   - coveralls

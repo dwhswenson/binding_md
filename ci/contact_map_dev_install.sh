@@ -7,8 +7,9 @@ git clone https://github.com/dwhswenson/contact_map.git
 pushd contact_map
 pip install -e .
 
-if [ -z "$CONTACT_MAP_BRANCH" ]
+if [ -n "$CONTACT_MAP_BRANCH" ]
 then
+    echo $CONTACT_MAP_BRANCH
     git checkout -b $CONTACT_MAP_BRANCH origin/$CONTACT_MAP_BRANCH
 fi
 git branch

@@ -1,10 +1,5 @@
 language: python
 
-matrix:
-  - CONDA_PY=2.7
-  - CONDA_PY=3.5
-  - CONDA_PY=3.6
-
 branches:
   only:
   - master
@@ -21,6 +16,11 @@ env:
     - secure: "jjXnafi5+5RaoqGZoB9Actv5yU1jk271f5fW804dcWusDwdgUSMRHyIhBNuWxmt/UggQax9rA6gq7kIvxghtugcUs1xPAsrzkQGDIP+21ebCzKgOeM0ergt9TZjMABO8rAcKoH4VrVQX8f9/CxHlAiS4D7LGLaPMrhuQgkz/jQ9HqD+KzL06kuHvqes97Q31QDvC4ihYSkZiEzRPQGoVYG1LBMRFDx9SQg06zH4cC530cj0A2gE8w9H2qa25j2kB+kYdehS4b3FUMui+tisDjnArqjvzVOlZIeiUheHQ1MqXpEFivEVK6KJrzjhlHDmJjJcJ6OsRpeCWQpPIrlF3nnFU5I7v2LcsVsHE3HAsravKPBVh12dZXYaSkllgl8lfq4yQ7N0WsE/PYR9ZDnPYRAC33hanAaRxQ+D3uBW69eCB6T2scPWLIsly2afGHnzMY2CIOL1YNmfZk+V0Y1Pj/U9XSz5e1AQG3VBOxqiaoA+87gjCxk+JcVlzkWnU4/Cs4AgX7JSesCOA2Hj5vlTDMG7Zw7blct9i3TiWJpI2CNZn+mmc16zOvKaEydJRGKNntmnTPxMxg4TjUtqtHBIrYVOjw/f6cLuH7OoI0qqRq35bIgafmNnlEHwotVYjsLwG1R+NkhObfV/+1ZjZMri0giSv4k3p3lgYB824rrADDfc="
     # AUTORELEASE_TOKEN
     - secure: "Gi+qIFrivC9eYrULnmIS3JsS5sF5nIF9ivFpv0fOV/Aw+571eI5XUZ/5RDrPZ0wmLO6S7yvohO/6WkLBdaH2RTUiRCTbhKN0MFAjowr5R/T88zmW7b/bRdW3zWEVyOxbUlVI6lJKlq7dJEM/dVgdFqqDOhfo0LUb/w82FbOrsNWTl+17PAXOtoE+4v0Y6oAeRuECCa0HptfcAtJGeURuRWNAtu3v6B82C96yevdvJvbi60IFTnQjNTHSfcCjpk4F3pCpVduMashuGhn2fCWKwM2+Yh/aspo0Lk4W8EqKgGcSGkFreKVWOv/vKwbqrDBE/5Wc27Z9qU21G0Q4jd1otxSmlrpapWTDBXLDiTykQXj8CmIOBsnSPiBUka7n7VnJXfHNyWEnPGESycofTe/88qiJmFIqq/rDY5lNveeImYZOAxf5+g0PBQQc8zhlfsDRUMVbch+TeMVslrodoGPGgDGZvb9NMm70yT2VYdqiW/maqLw8kkgMoK6Tnth1pkBHnpd8NB4O1m6ziHL1/HutNtYVRdCGFQgojJRCFhf/kALQZv267EOkvfjYpCfxpGkehZpNx2tentMXnqncDnr9VKDStmd4Q9Db6bOzlt3CsGOTvP6ROPQFEr7l+vF0VfzJts4l091m6MlEH/7zYUnSCJhe0khAS3/ZP0KnCR48ELc="
+  matrix:
+    - CONDA_PY=2.7
+    - CONDA_PY=3.5
+    - CONDA_PY=3.6
+
 
 # we use before_install to set up the 
 before_install:
